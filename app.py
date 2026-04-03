@@ -4,61 +4,10 @@ import subprocess
 import os
 import sys
 import time
-import io
+import glob
 from datetime import datetime
 
-# auto-install chromium if not present
-@st.cache_resource
-def install_playwright_browser():
-    try:
-        subprocess.run(
-            [sys.executable, "-m", "playwright", "install", "chromium"],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        return True
-    except Exception as e:
-        st.error(f"Failed to install browser: {e}")
-        return False
-
-install_playwright_browser()
-
-from playwright.sync_api import sync_playwright
-from scrapers.google_map_scraper import (
-    scroll_and_collect_links,
-    get_place_details,
-    dismiss_consent,
-)
-from utils.excel import save_to_excel
-
-AREAS = [
-    "Ambawadi", "Amraiwadi", "Asarwa", "Ashram Road", "Aslali",
-    "Astodia", "Bapunagar", "Bardolpura", "Behrampura", "Bhadra",
-    "Bodakdev", "Bopal", "CG Road", "Chandkheda", "Chandlodia",
-    "Changodar", "CTM", "CTM Char Rasta", "Dani Limbada", "Dariapur",
-    "Delhi Chakla", "Delhi Darwaja", "Drive In Road", "Dudheshwar",
-    "Dudheshwar Road", "Ellis Bridge", "Gandhi Road", "Geeta Mandir",
-    "Geeta Mandir Road", "Ghatlodia", "Gheekanta", "Gheekanta Road",
-    "Ghodasar", "Gomtipur", "Gota", "Gulbai Tekra", "Gurukul",
-    "Hatkeshwar", "Income Tax", "Isanpur", "Jamalpur", "Jasodanagar",
-    "Jivraj Park", "Jodhpur", "Juhapura", "Juna Wadaj", "Kalupur",
-    "Kankaria", "Kankaria Road", "Kathwada", "Khadia", "Khamasa",
-    "Khanpur", "Khokhara", "Krishnanagar", "Kuber Nagar", "Madhupura",
-    "Manek Chowk", "Maninagar", "Meghani Nagar", "Memnagar",
-    "Mirzapur", "Mirzapur Road", "Naranpura", "Naroda", "Naroda GIDC",
-    "Naroda road", "Narol", "Nava Wadaj", "Navarangpura Gam", "Nikol",
-    "Nirnay Nagar", "Odhav", "Odhav GIDC", "Odhav Road", "Paldi",
-    "Pankore Naka", "Patharkuva", "Patthar Kuva", "Raipur", "Rakhial",
-    "Ranip", "Ranna Park", "Ratan Pole", "Revdi Bazaar", "Sabarmati",
-    "Sahijpur Bogha", "Sarangpur", "Saraspur", "Sardar Nagar", "Sarkej",
-    "Sarkhej Gandhinagar Highway", "Satellite", "Satellite Road",
-    "Shah Alam Road", "Shahibagh", "Shahibaug Road", "Shahpur", "Sola",
-    "Sola Road", "Subhash Bridge", "Tavdipura", "Teen Darwaja",
-    "Thakkarbapa Nagar", "Thaltej", "Usmanpura", "Vasna", "Vastral",
-    "Vastrapur", "Vatva", "Vatva GIDC", "Vejalpur",
-]
-
+# page config
 st.set_page_config(
     page_title="Location Scraper",
     page_icon="",
@@ -70,7 +19,6 @@ st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
     * { font-family: 'Inter', sans-serif; }
-    .main { background: #0a0a0f; }
     .stApp {
         background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #16213e 100%);
     }
@@ -115,18 +63,6 @@ st.markdown("""
         letter-spacing: 1px;
         margin-top: 4px;
     }
-    .log-box {
-        background: rgba(10, 10, 20, 0.8);
-        border: 1px solid rgba(100, 100, 255, 0.1);
-        border-radius: 8px;
-        padding: 1rem;
-        font-family: 'Courier New', monospace;
-        font-size: 0.82rem;
-        color: #aaaacc;
-        max-height: 400px;
-        overflow-y: auto;
-        line-height: 1.6;
-    }
     .area-tag {
         display: inline-block;
         background: rgba(102, 126, 234, 0.15);
@@ -142,21 +78,6 @@ st.markdown("""
         border-radius: 8px;
         overflow: hidden;
     }
-    .stButton > button {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border: none;
-        border-radius: 8px;
-        padding: 0.6rem 2rem;
-        font-weight: 600;
-        font-size: 0.95rem;
-        transition: all 0.3s ease;
-        width: 100%;
-    }
-    .stButton > button:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 4px 20px rgba(102, 126, 234, 0.4);
-    }
     .stDownloadButton > button {
         background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
         color: #0a0a0f;
@@ -165,12 +86,29 @@ st.markdown("""
         font-weight: 600;
         width: 100%;
     }
-    .stMultiSelect [data-baseweb="tag"] {
-        background: rgba(102, 126, 234, 0.2);
-        border: 1px solid rgba(102, 126, 234, 0.4);
+    .stButton > button {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        padding: 0.6rem 2rem;
+        font-weight: 600;
+        width: 100%;
     }
-    .stProgress > div > div {
-        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    .info-box {
+        background: rgba(30, 30, 50, 0.6);
+        border: 1px solid rgba(100, 100, 255, 0.15);
+        border-radius: 10px;
+        padding: 1.5rem;
+        color: #aaaacc;
+        margin: 1rem 0;
+    }
+    .info-box h4 { color: #667eea; margin-bottom: 0.5rem; }
+    .info-box code {
+        background: rgba(0,0,0,0.3);
+        padding: 2px 6px;
+        border-radius: 4px;
+        color: #38ef7d;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -178,243 +116,188 @@ st.markdown("""
 st.markdown("""
 <div class="title-block">
     <h1>Location Scraper</h1>
-    <p>Google Maps data extraction tool</p>
+    <p>Google Maps data extraction - View & Download results</p>
 </div>
 """, unsafe_allow_html=True)
 
 # sidebar
 with st.sidebar:
-    st.markdown("### Configuration")
-    city = st.text_input("City", value="ahmedabad", placeholder="ahmedabad")
-    if not city:
-        city = "ahmedabad"
+    st.markdown("### Data Source")
+    mode = st.radio("", ["View scraped data", "Upload Excel file"], label_visibility="collapsed")
 
-    category = st.text_input("Search Category", placeholder="e.g. cafes, restaurants, pg hostels")
+    if mode == "View scraped data":
+        st.markdown("---")
+        # find existing excel files in data/
+        data_dir = "data"
+        excel_files = []
+        if os.path.exists(data_dir):
+            excel_files = sorted(glob.glob(os.path.join(data_dir, "*.xlsx")))
 
-    st.markdown("---")
-    st.markdown("### Area Selection")
+        if excel_files:
+            file_names = [os.path.basename(f) for f in excel_files]
+            selected_file = st.selectbox("Select file", file_names)
+            selected_path = os.path.join(data_dir, selected_file) if selected_file else None
+        else:
+            selected_path = None
+            st.caption("No data files found. Run the scraper locally first.")
 
-    select_mode = st.radio("Select areas", ["All areas", "Pick specific areas", "Type custom area"])
-    selected_areas = []
-
-    if select_mode == "All areas":
-        selected_areas = AREAS[:]
-        st.caption(f"{len(selected_areas)} areas selected")
-    elif select_mode == "Pick specific areas":
-        selected_areas = st.multiselect("Choose areas", options=AREAS, default=[], placeholder="Select areas...")
-    elif select_mode == "Type custom area":
-        custom = st.text_input("Enter area name(s)", placeholder="e.g. Bopal, Satellite")
-        if custom:
-            selected_areas = [a.strip() for a in custom.split(",") if a.strip()]
-
-    st.markdown("---")
-    can_start = bool(category and selected_areas)
-    start_btn = st.button("Start Scraping", disabled=not can_start, use_container_width=True)
-
-    if not category:
-        st.caption("Enter a search category to begin")
-    elif not selected_areas:
-        st.caption("Select at least one area")
-
-# session state
-if "results" not in st.session_state:
-    st.session_state.results = []
-if "is_running" not in st.session_state:
-    st.session_state.is_running = False
-if "excel_bytes" not in st.session_state:
-    st.session_state.excel_bytes = None
-if "excel_filename" not in st.session_state:
-    st.session_state.excel_filename = ""
+        st.markdown("---")
+        st.markdown("""
+        <div class="info-box">
+            <h4>How to scrape data</h4>
+            <p>Run the scraper locally on your machine:</p>
+            <p><code>python main.py</code></p>
+            <p style="margin-top:8px; font-size:0.8rem;">
+                The scraper uses a real browser to extract data from Google Maps.
+                This must be run on your local machine - cloud hosting blocks browser automation.
+            </p>
+            <p style="margin-top:8px; font-size:0.8rem;">
+                After scraping, push to GitHub and results will appear here automatically.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
 
 
-def make_excel_bytes(results, category, city):
-    filepath = os.path.join("data", f"{category.replace(' ', '_')}_{city}.xlsx")
-    os.makedirs("data", exist_ok=True)
-    save_to_excel(results, filepath, category=category)
-    with open(filepath, "rb") as f:
-        return f.read(), filepath
-
-
-def scrape_area_with_logs(page, area, city, search_type, log):
-    query = f"{search_type} in {area} {city}"
-    url = f"https://www.google.com/maps/search/{query.replace(' ', '+')}"
-
+def load_excel(filepath):
     try:
-        page.goto(url, timeout=60000, wait_until="domcontentloaded")
-        time.sleep(2)
-    except:
-        log(f"  failed to load page")
-        return []
-
-    dismiss_consent(page)
-    links = scroll_and_collect_links(page, pause=2.0)
-    if not links:
-        log(f"  no places found")
-        return []
-
-    log(f"  {len(links)} places, getting details...")
-    results = []
-    for i, link in enumerate(links):
-        info = get_place_details(page, link)
-        info["area"] = area
-        results.append(info)
-        ph = info["phone"] if info["phone"] else "-"
-        if (i + 1) % 5 == 0 or i == len(links) - 1:
-            log(f"  {i+1}/{len(links)} | {info['name'][:30]} | ph: {ph}")
-    return results
+        xl = pd.ExcelFile(filepath)
+        sheets = {}
+        for name in xl.sheet_names:
+            df = pd.read_excel(xl, sheet_name=name)
+            if len(df) > 0:
+                sheets[name] = df
+        return sheets
+    except Exception as e:
+        st.error(f"Error reading file: {e}")
+        return None
 
 
-def run_scraper(city, category, areas):
-    st.session_state.results = []
-    st.session_state.is_running = True
-    total = len(areas)
-    all_results = []
+def display_data(sheets, filename):
+    if not sheets:
+        st.warning("No data found in this file.")
+        return
 
-    progress_bar = st.progress(0, text="Starting...")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        areas_ph = st.empty()
-    with col2:
-        places_ph = st.empty()
-    with col3:
-        phones_ph = st.empty()
+    # get combined sheet
+    main_sheet = sheets.get("All Results", list(sheets.values())[0])
+    all_areas = [name for name in sheets.keys() if name != "All Results"]
 
-    log_container = st.empty()
-    table_container = st.empty()
-    download_container = st.empty()
-    logs = []
-
-    def log(msg):
-        logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}")
-        log_html = "<br>".join(logs[-50:])
-        log_container.markdown(f'<div class="log-box">{log_html}</div>', unsafe_allow_html=True)
-
-    def update_stats(done, total_a):
-        pc = sum(1 for r in all_results if r.get("phone"))
-        areas_ph.markdown(
-            f'<div class="stat-card"><div class="num">{done}/{total_a}</div><div class="label">Areas Done</div></div>',
-            unsafe_allow_html=True)
-        places_ph.markdown(
-            f'<div class="stat-card"><div class="num">{len(all_results)}</div><div class="label">Places Found</div></div>',
-            unsafe_allow_html=True)
-        phones_ph.markdown(
-            f'<div class="stat-card"><div class="num">{pc}</div><div class="label">Phone Numbers</div></div>',
-            unsafe_allow_html=True)
-
-    update_stats(0, total)
-    log(f"Starting: {category} in {total} area(s) of {city}")
-
-    with sync_playwright() as p:
-        browser = p.chromium.launch(
-            headless=True,
-            args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
-        )
-        page = browser.new_page()
-
-        try:
-            for i, area in enumerate(areas):
-                progress_bar.progress(i / total, text=f"Scraping {area}... ({i+1}/{total})")
-                log(f"--- [{i+1}/{total}] {area} ---")
-
-                start = time.time()
-                try:
-                    data = scrape_area_with_logs(page, area, city, category, log)
-                    all_results.extend(data)
-                    log(f"{area}: {len(data)} results ({time.time() - start:.0f}s)")
-                except Exception as e:
-                    log(f"{area}: error - {str(e)[:60]}")
-
-                update_stats(i + 1, total)
-
-                if all_results:
-                    df = pd.DataFrame([{
-                        "Name": r.get("name", ""),
-                        "Phone": r.get("phone", ""),
-                        "Address": r.get("address", ""),
-                        "Rating": r.get("rating", ""),
-                        "Area": r.get("area", ""),
-                    } for r in all_results])
-                    table_container.dataframe(df, use_container_width=True, hide_index=True)
-
-        except Exception as e:
-            log(f"Error: {e}")
-        finally:
-            browser.close()
-
-    progress_bar.progress(1.0, text="Done!")
-    st.session_state.results = all_results
-    st.session_state.is_running = False
-    with_phone = sum(1 for r in all_results if r.get("phone"))
-    log(f"Finished. Total scraped: {len(all_results)} | With phone: {with_phone} | Without: {len(all_results) - with_phone}")
-    log(f"Excel will contain only entries with phone numbers ({with_phone})")
-
-    # generate excel and show download
-    if all_results:
-        excel_data, filepath = make_excel_bytes(all_results, category, city)
-        st.session_state.excel_bytes = excel_data
-        st.session_state.excel_filename = f"{category.replace(' ', '_')}_{city}.xlsx"
-
-        download_container.download_button(
-            label=f"Download Excel ({with_phone} results with phone)",
-            data=excel_data,
-            file_name=st.session_state.excel_filename,
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True,
-        )
-        log(f"Excel ready: {filepath}")
-
-    return all_results
-
-
-# main flow
-if start_btn and can_start:
-    run_scraper(city, category, selected_areas)
-
-elif st.session_state.results and not st.session_state.is_running:
-    results = st.session_state.results
+    # stats
+    total = len(main_sheet)
+    phone_count = main_sheet.iloc[:, 2].notna().sum() if len(main_sheet.columns) > 2 else 0
+    # try to count non-empty phones
+    if len(main_sheet.columns) > 2:
+        phone_col = main_sheet.iloc[:, 2].astype(str)
+        phone_count = sum(1 for p in phone_col if p and p != "nan" and p != "None" and p != "No Info" and p.strip())
 
     col1, col2, col3 = st.columns(3)
-    pc = sum(1 for r in results if r.get("phone"))
-    ac = len(set(r.get("area", "") for r in results))
     col1.markdown(
-        f'<div class="stat-card"><div class="num">{len(results)}</div><div class="label">Total Places</div></div>',
+        f'<div class="stat-card"><div class="num">{total}</div><div class="label">Total Results</div></div>',
         unsafe_allow_html=True)
     col2.markdown(
-        f'<div class="stat-card"><div class="num">{pc}</div><div class="label">Phone Numbers</div></div>',
+        f'<div class="stat-card"><div class="num">{phone_count}</div><div class="label">With Phone</div></div>',
         unsafe_allow_html=True)
     col3.markdown(
-        f'<div class="stat-card"><div class="num">{ac}</div><div class="label">Areas Covered</div></div>',
+        f'<div class="stat-card"><div class="num">{len(all_areas)}</div><div class="label">Areas</div></div>',
         unsafe_allow_html=True)
 
-    df = pd.DataFrame([{
-        "Name": r.get("name", ""),
-        "Phone": r.get("phone", ""),
-        "Address": r.get("address", ""),
-        "Rating": r.get("rating", ""),
-        "Area": r.get("area", ""),
-    } for r in results])
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.markdown("")
 
-    # download button for previous results
-    if st.session_state.excel_bytes:
-        st.download_button(
-            label=f"Download Excel ({len(results)} results)",
-            data=st.session_state.excel_bytes,
-            file_name=st.session_state.excel_filename,
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True,
-        )
+    # tabs for sheets
+    if len(sheets) > 1:
+        tab_names = list(sheets.keys())
+        tabs = st.tabs(tab_names)
+        for tab, name in zip(tabs, tab_names):
+            with tab:
+                st.dataframe(sheets[name], use_container_width=True, hide_index=True)
+    else:
+        st.dataframe(main_sheet, use_container_width=True, hide_index=True)
 
-else:
-    st.markdown("---")
-    st.markdown("""
-    <div style="text-align:center; padding: 3rem 0; color: #555577;">
-        <p style="font-size: 1.1rem; margin-bottom: 0.5rem;">Configure your search in the sidebar and click Start Scraping</p>
-        <p style="font-size: 0.85rem;">Supports: cafes, restaurants, pg hostels, gyms, salons, and more</p>
-    </div>
-    """, unsafe_allow_html=True)
+    # download button
+    st.markdown("")
+    with open(filepath, "rb") if isinstance(filepath, str) else filepath as f:
+        if isinstance(filepath, str):
+            data = f.read()
+        else:
+            data = filepath.read()
 
-    if selected_areas:
-        st.markdown("**Selected Areas:**")
-        tags = "".join([f'<span class="area-tag">{a}</span>' for a in selected_areas])
+    st.download_button(
+        label=f"Download {filename}",
+        data=data if isinstance(filepath, str) else filepath.getvalue(),
+        file_name=filename,
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True,
+    )
+
+    # show areas as tags
+    if all_areas:
+        st.markdown("")
+        st.markdown("**Areas covered:**")
+        tags = "".join([f'<span class="area-tag">{a}</span>' for a in all_areas])
         st.markdown(f'<div style="margin-top:8px">{tags}</div>', unsafe_allow_html=True)
+
+
+# main content
+if mode == "View scraped data":
+    if selected_path and os.path.exists(selected_path):
+        sheets = load_excel(selected_path)
+        if sheets:
+            display_data(sheets, os.path.basename(selected_path))
+    else:
+        st.markdown("---")
+        st.markdown("""
+        <div style="text-align:center; padding: 3rem 0; color: #555577;">
+            <p style="font-size: 1.1rem; margin-bottom: 0.5rem;">No scraped data found</p>
+            <p style="font-size: 0.85rem;">Run <code style="color:#38ef7d">python main.py</code> locally to scrape data, then push to GitHub</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+elif mode == "Upload Excel file":
+    st.markdown("---")
+    uploaded = st.file_uploader("Upload an Excel file", type=["xlsx", "xls"])
+    if uploaded:
+        try:
+            xl = pd.ExcelFile(uploaded)
+            sheets = {}
+            for name in xl.sheet_names:
+                df = pd.read_excel(xl, sheet_name=name)
+                if len(df) > 0:
+                    sheets[name] = df
+
+            if sheets:
+                main_sheet = sheets.get("All Results", list(sheets.values())[0])
+                total = len(main_sheet)
+                all_areas = [name for name in sheets.keys() if name != "All Results"]
+
+                col1, col2, col3 = st.columns(3)
+                col1.markdown(
+                    f'<div class="stat-card"><div class="num">{total}</div><div class="label">Total Results</div></div>',
+                    unsafe_allow_html=True)
+                col2.markdown(
+                    f'<div class="stat-card"><div class="num">{len(all_areas)}</div><div class="label">Areas</div></div>',
+                    unsafe_allow_html=True)
+                col3.markdown(
+                    f'<div class="stat-card"><div class="num">{len(sheets)}</div><div class="label">Sheets</div></div>',
+                    unsafe_allow_html=True)
+
+                if len(sheets) > 1:
+                    tabs = st.tabs(list(sheets.keys()))
+                    for tab, name in zip(tabs, sheets.keys()):
+                        with tab:
+                            st.dataframe(sheets[name], use_container_width=True, hide_index=True)
+                else:
+                    st.dataframe(main_sheet, use_container_width=True, hide_index=True)
+
+                if all_areas:
+                    st.markdown("")
+                    st.markdown("**Areas:**")
+                    tags = "".join([f'<span class="area-tag">{a}</span>' for a in all_areas])
+                    st.markdown(f'<div style="margin-top:8px">{tags}</div>', unsafe_allow_html=True)
+
+        except Exception as e:
+            st.error(f"Error reading file: {e}")
+    else:
+        st.markdown("""
+        <div style="text-align:center; padding: 3rem 0; color: #555577;">
+            <p style="font-size: 1.1rem;">Upload a scraped Excel file to view the data</p>
+        </div>
+        """, unsafe_allow_html=True)
