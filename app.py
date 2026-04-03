@@ -183,11 +183,15 @@ def display_data(sheets, filename):
 
     # stats
     total = len(main_sheet)
-    phone_count = main_sheet.iloc[:, 2].notna().sum() if len(main_sheet.columns) > 2 else 0
-    # try to count non-empty phones
+    phone_count = 0
     if len(main_sheet.columns) > 2:
-        phone_col = main_sheet.iloc[:, 2].astype(str)
-        phone_count = sum(1 for p in phone_col if p and p != "nan" and p != "None" and p != "No Info" and p.strip())
+        for p in main_sheet.iloc[:, 2]:
+            try:
+                val = str(p).strip() if p is not None else ""
+                if val and val != "nan" and val != "None" and val != "No Info":
+                    phone_count += 1
+            except:
+                pass
 
     col1, col2, col3 = st.columns(3)
     col1.markdown(
