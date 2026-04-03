@@ -142,20 +142,6 @@ with st.sidebar:
             st.caption("No data files found. Run the scraper locally first.")
 
         st.markdown("---")
-        st.markdown("""
-        <div class="info-box">
-            <h4>How to scrape data</h4>
-            <p>Run the scraper locally on your machine:</p>
-            <p><code>python main.py</code></p>
-            <p style="margin-top:8px; font-size:0.8rem;">
-                The scraper uses a real browser to extract data from Google Maps.
-                This must be run on your local machine - cloud hosting blocks browser automation.
-            </p>
-            <p style="margin-top:8px; font-size:0.8rem;">
-                After scraping, push to GitHub and results will appear here automatically.
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
 
 
 def load_excel(filepath):
