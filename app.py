@@ -230,7 +230,7 @@ if "excel_filename" not in st.session_state:
 def make_excel_bytes(results, category, city):
     filepath = os.path.join("data", f"{category.replace(' ', '_')}_{city}.xlsx")
     os.makedirs("data", exist_ok=True)
-    save_to_excel(results, filepath)
+    save_to_excel(results, filepath, category=category)
     with open(filepath, "rb") as f:
         return f.read(), filepath
 
@@ -344,7 +344,9 @@ def run_scraper(city, category, areas):
     progress_bar.progress(1.0, text="Done!")
     st.session_state.results = all_results
     st.session_state.is_running = False
-    log(f"Finished. Total: {len(all_results)} results")
+    with_phone = sum(1 for r in all_results if r.get("phone"))
+    log(f"Finished. Total scraped: {len(all_results)} | With phone: {with_phone} | Without: {len(all_results) - with_phone}")
+    log(f"Excel will contain only entries with phone numbers ({with_phone})")
 
     # generate excel and show download
     if all_results:
@@ -353,7 +355,7 @@ def run_scraper(city, category, areas):
         st.session_state.excel_filename = f"{category.replace(' ', '_')}_{city}.xlsx"
 
         download_container.download_button(
-            label=f"Download Excel ({len(all_results)} results)",
+            label=f"Download Excel ({with_phone} results with phone)",
             data=excel_data,
             file_name=st.session_state.excel_filename,
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

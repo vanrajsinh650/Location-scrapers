@@ -84,11 +84,13 @@ def save_results(all_results, category, city):
     if not all_results:
         print("\nNo results to save.")
         return
+    with_phone = [r for r in all_results if r.get("phone")]
+    print(f"\nTotal scraped: {len(all_results)} | With phone: {len(with_phone)} | Without: {len(all_results) - len(with_phone)}")
     filename = f"{category.replace(' ', '_')}_{city}.xlsx"
     filepath = os.path.join("data", filename)
     os.makedirs("data", exist_ok=True)
-    save_to_excel(all_results, filepath)
-    print(f"\nSaved {len(all_results)} results to {os.path.abspath(filepath)}")
+    save_to_excel(all_results, filepath, category=category)
+    print(f"Saved {len(with_phone)} results (with phone only) to {os.path.abspath(filepath)}")
 
 
 def run():
