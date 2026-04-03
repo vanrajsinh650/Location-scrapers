@@ -172,10 +172,12 @@ def load_excel(filepath):
         return None
 
 
-def display_data(sheets, filename):
+def display_data(sheets, filepath):
     if not sheets:
         st.warning("No data found in this file.")
         return
+
+    filename = os.path.basename(filepath)
 
     # get combined sheet
     main_sheet = sheets.get("All Results", list(sheets.values())[0])
@@ -218,15 +220,12 @@ def display_data(sheets, filename):
 
     # download button
     st.markdown("")
-    with open(filepath, "rb") if isinstance(filepath, str) else filepath as f:
-        if isinstance(filepath, str):
-            data = f.read()
-        else:
-            data = filepath.read()
+    with open(filepath, "rb") as f:
+        data = f.read()
 
     st.download_button(
         label=f"Download {filename}",
-        data=data if isinstance(filepath, str) else filepath.getvalue(),
+        data=data,
         file_name=filename,
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         use_container_width=True,
@@ -245,7 +244,7 @@ if mode == "View scraped data":
     if selected_path and os.path.exists(selected_path):
         sheets = load_excel(selected_path)
         if sheets:
-            display_data(sheets, os.path.basename(selected_path))
+            display_data(sheets, selected_path)
     else:
         st.markdown("---")
         st.markdown("""
