@@ -228,9 +228,28 @@ with st.sidebar:
             file_names = [os.path.basename(f) for f in excel_files]
             selected_file = st.selectbox("File", file_names)
             selected_path = os.path.join(data_dir, selected_file) if selected_file else None
+            load_btn = st.button("Load File", use_container_width=True)
         else:
             selected_path = None
+            load_btn = False
             st.caption("No data files found")
+
+        if st.button("Clear / Reset", use_container_width=True):
+            st.session_state.loaded_sheets = None
+            st.session_state.loaded_path = None
+            st.rerun()
+
+# session state for loaded data
+if "loaded_sheets" not in st.session_state:
+    st.session_state.loaded_sheets = None
+if "loaded_path" not in st.session_state:
+    st.session_state.loaded_path = None
+
+# load on button click only
+if mode == "View scraped data" and excel_files:
+    if load_btn and selected_path:
+        st.session_state.loaded_sheets = load_excel(selected_path)
+        st.session_state.loaded_path = selected_path
 
 
 def load_excel(filepath):
@@ -309,15 +328,12 @@ def display_data(sheets, filepath):
 
 # main content
 if mode == "View scraped data":
-    if selected_path and os.path.exists(selected_path):
-        sheets = load_excel(selected_path)
-        if sheets:
-            display_data(sheets, selected_path)
+    if st.session_state.loaded_sheets and st.session_state.loaded_path:
+        display_data(st.session_state.loaded_sheets, st.session_state.loaded_path)
     else:
         st.markdown("""
         <div class="empty-state">
-            <p>no data files found</p>
-            <div class="cmd">python main.py</div>
+            <p>select a file and click load</p>
         </div>
         """, unsafe_allow_html=True)
 
